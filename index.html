@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+<title>Memory Game – Animals – 24</title>
+<style>
+body { font-family: Arial, sans-serif; text-align: center; background: #f5f3ef; margin: 0; padding: 12px 30px; }
+h1 { color: #555; font-size: 32px; margin-bottom: 10px; }
+#newGame { font-size: 18px; padding: 10px 22px; margin-top: 5px; border: none; border-radius: 10px; background: #6ec6e8; color: white; cursor: pointer; }
+#newGame:hover { background: #55b5d8; }
+#stats { margin-top: 18px; font-size: 20px; color: #555; }
+#best { margin-top: 10px; font-size: 19px; color: #777; }
+#game { display: grid; grid-template-columns: repeat(6, 140px); gap: 12px; justify-content: center; margin-top: 12px; }
+.card { width: 140px; height: 140px; background: #6ec6e8;position: relative; 
+border-radius: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 65px; user-select: none; box-shadow: 0 3px 7px rgba(0,0,0,0.15); }
+/* Vodoznak BrainPlayMemory */
+.card::before {
+    content: "BrainPlayMemory";
+    position: absolute;
+    top: 18px;
+    left: 0;
+    width: 100%;
+    text-align: center;
+    font-size: 13px;
+    font-weight: bold;
+    color: rgba(0, 0, 0, 0.24);
+    pointer-events: none;
+}
+.card.open { background: #ffffff; }
+.card.matched { background: #e0e0e0; cursor: default; }
+#message { margin-top: 28px; font-size: 22px; color: #555; }
+/* Priestor pre budúcu reklamu */
+#adSpace {
+    width: 100%;
+    max-width: 900px;
+    min-height: 100px;
+    margin: 15px auto 0;
+}
+/* Zobrazenie na mobile */
+@media (max-width: 600px) {
+
+    body {
+        box-sizing: border-box;
+        padding: 16px 10px;
+    }
+
+    h1 {
+        font-size: 24px;
+    }
+
+    #stats {
+        font-size: 17px;
+    }
+
+    #best {
+        font-size: 15px;
+    }
+
+    #game {
+        width: 100%;
+        max-width: 400px;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 8px;
+        margin: 20px auto 0;
+    }
+
+    .card {
+        width: 100%;
+        height: auto;
+        aspect-ratio: 1 / 1;
+        box-sizing: border-box;
+        border-radius: 12px;
+        font-size: clamp(28px, 10vw, 52px);
+    }
+
+    .card::before {
+        top: 10px;
+        font-size: clamp(7px, 2vw, 10px);
+    }
+
+    #message {
+        font-size: 18px;
+    }
+
+    #adSpace {
+        width: 100%;
+        max-width: 400px;
+        min-height: 90px;
+        margin: 20px auto 0;
+    }
+}
+
+</style>
+</head>
+<body>
+<h1>🐾 Memory Game – Animals – 24</h1>
+<button id="newGame">New Game</button>
+<div id="stats">Attempts: 0 &nbsp;&nbsp;&nbsp; Time: 0:00</div>
+<div id="best">🏆 Best score: none yet</div>
+<div id="game"></div>
+<div id="message"></div>
+<div id="adSpace"></div>
+<script>
+const animals = [
+    "🐶", "🐶", "🐱", "🐱", "🐰", "🐰", "🦊", "🦊",
+    "🐻", "🐻", "🐼", "🐼", "🐸", "🐸", "🐵", "🐵",
+    "🐨", "🐨", "🦁", "🦁", "🐯", "🐯", "🐷", "🐷"
+];
+const game = document.getElementById("game");
+const message = document.getElementById("message");
+const newGameButton = document.getElementById("newGame");
+const stats = document.getElementById("stats");
+const bestDisplay = document.getElementById("best");
+let firstCard = null;
+let secondCard = null;
+let lockBoard = false;
+let matchedPairs = 0;
+let attempts = 0;
+let seconds = 0;
+let timer = null;
+let gameStarted = false;
+let bestAttempts = null;
+let bestTime = null;
+function updateStats() {
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    const formattedTime = minutes + ":" + String(remainingSeconds).padStart(2, "0");
+    stats.innerHTML = "Attempts: " + attempts + " &nbsp;&nbsp;&nbsp; Time: " + formattedTime;
+}
+function playWinSound() {
+    const audio = new AudioContext();
+    const oscillator = audio.createOscillator();
+    const gain = audio.createGain();
+    oscillator.connect(gain);
+    gain.connect(audio.destination);
+    oscillator.frequency.value = 880;
+    gain.gain.value = 0.2;
+    oscillator.start();
+    oscillator.stop(audio.currentTime + 0.4);
+}
+function updateBestDisplay() {
+    if (bestAttempts === null) {
+        bestDisplay.textContent = "🏆 Best score: none yet";
+        return;
+    }
+    const minutes = Math.floor(bestTime / 60);
+    const remainingSeconds = bestTime % 60;
+    const formattedTime = minutes + ":" + String(remainingSeconds).padStart(2, "0");
+    bestDisplay.textContent = "🏆 Best score: " + bestAttempts + " attempts / " + formattedTime;
+}
+function startTimer() {
+    if (gameStarted) return;
+    gameStarted = true;
+    timer = setInterval(() => {
+        seconds++;
+        updateStats();
+    }, 1000);
+}
+function stopTimer() {
+    clearInterval(timer);
+    timer = null;
+    gameStarted = false;
+}
+function startGame() {
+    stopTimer();
+    game.innerHTML = "";
+    message.textContent = "";
+    firstCard = null;
+    secondCard = null;
+    lockBoard = false;
+    matchedPairs = 0;
+    attempts = 0;
+    seconds = 0;
+    gameStarted = false;
+    updateStats();
+    updateBestDisplay();
+    const shuffledAnimals = [...animals];
+    shuffledAnimals.sort(() => Math.random() - 0.5);
+    shuffledAnimals.forEach(animal => {
+        const card = document.createElement("div");
+        card.classList.add("card");
+        card.textContent = "🐾";
+        card.dataset.animal = animal;
+        card.addEventListener("click", () => {
+            if (lockBoard) return;
+            if (card.classList.contains("open")) return;
+            if (card.classList.contains("matched")) return;
+            startTimer();
+            card.classList.add("open");
+            card.textContent = animal;
+            if (!firstCard) {
+                firstCard = card;
+                return;
+            }
+            secondCard = card;
+            lockBoard = true;
+            attempts++;
+            updateStats();
+            if (firstCard.dataset.animal === secondCard.dataset.animal) {
+                firstCard.classList.add("matched");
+                secondCard.classList.add("matched");
+                matchedPairs++;
+                firstCard = null;
+                secondCard = null;
+                lockBoard = false;
+                if (matchedPairs === animals.length / 2) {
+                    confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 } });
+                    stopTimer();
+                    if (bestAttempts === null || attempts < bestAttempts ||
+                        (attempts === bestAttempts && seconds < bestTime)) {
+                        bestAttempts = attempts;
+                        bestTime = seconds;
+                        updateBestDisplay();
+                        message.textContent = "🎉 New record! Well done!";
+                    } else {
+                        message.textContent = "🎉 Well done! You found all the pairs!";
+                    }
+                }
+            } else {
+                setTimeout(() => {
+                    firstCard.classList.remove("open");
+                    secondCard.classList.remove("open");
+                    firstCard.textContent = "🐾";
+                    secondCard.textContent = "🐾";
+                    firstCard = null;
+                    secondCard = null;
+                    lockBoard = false;
+                }, 2500);
+            }
+        });
+        game.appendChild(card);
+    });
+}
+newGameButton.addEventListener("click", startGame);
+startGame();
+</script>
+</body>
+</html>
